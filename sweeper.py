@@ -64,6 +64,56 @@ def reveal_tile(board, player):
 	flood_fill(board, x, y)
 
 	# expanding search to find mine borders
+def check_mine(board, x, y):
+	# bounds checks
+	if x < 0 or y < 0:
+		return 0
+	if x >= len(board) or y >= len(board[0]):
+		return 0
+
+	# check if this tile is a mine
+	if board[x][y] == "*":
+		return 1
+	else:
+		return 0
+
+def count_surrounding_mines(board, x, y):
+	mine_count = 0
+
+	mine_count += check_mine(board, x-1, y-1)
+	mine_count += check_mine(board, x-1, y)
+	mine_count += check_mine(board, x-1, y+1)
+
+	mine_count += check_mine(board, x, y-1)
+	mine_count += check_mine(board, x, y)
+	mine_count += check_mine(board, x, y+1)
+
+	mine_count += check_mine(board, x+1, y-1)
+	mine_count += check_mine(board, x+1, y)
+	mine_count += check_mine(board, x+1, y+1)
+	
+	return mine_count
+	
+
+def resolve_board(board):
+	for x in range(len(board)):
+		for y in range(len(board[0])):
+			# skip over mines
+			if board[x][y] == "*":
+				continue
+				
+			mine_count = count_surrounding_mines(board, x, y)
+			#   assign a number or . to our mine count for this tile
+			# we're keeping our values in strings for
+			# 1) consistency
+			# 2) because we're awful programmers
+			if mine_count == 0:
+				tile_value = "."
+			else:
+				tile_value = str(mine_count)
+
+			board[x][y] = tile_value
+				
 
 def print_board(board, player):
 	GRID = (len(board),len(board[0]))
@@ -156,9 +206,10 @@ logging.info(" ")
 logging.info("started minesweeper")
 
 MINES = 50
-GRID = (10,10)
+GRID = (25,25)
 
 board = [[" " for x in range(GRID[0])] for i in range(GRID[1])]
+solution_board = [[" " for x in range(GRID[0])] for i in range(GRID[1])]
 
 player = Player(board)
 
@@ -166,7 +217,14 @@ print_board(board, player)
 
 generate_mines(board, MINES)
 
+for x, board_row in enumerate(board):
+	for y, board_tile in enumerate(board_row):
+		solution_board[x][y] = board_tile
+
+resolve_board(solution_board)
+
 print_board(board, player)
+print_board(solution_board, player)
 
 num_moves = 10
 
