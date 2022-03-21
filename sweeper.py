@@ -1,20 +1,54 @@
 import logging
 import random
+#import pygame
+import sys
 
+def colored(r, g, b, text):
+    return "\033[38;2;{};{};{}m{} \033[38;2;255;255;255m".format(r, g, b, text)
 
+def colored_background_reset(text):
+	return "{}\u001b[0m".format(text)
 
-def print_board(board):
+def colored_background_black(text):
+    return colored_background_reset("\u001b[40m{}".format(text))
+
+def colored_background_red(text):
+    return colored_background_reset("\u001b[41m{}".format(text))
+
+def colored_background_green(text):
+    return colored_background_reset("\u001b[42m{}".format(text))
+
+def colored_background_yellow(text):
+    return colored_background_reset("\u001b[43m{}".format(text))
+
+def print_board(board, player):
 	GRID = (len(board),len(board[0]))
+
+	MINE_ICON = "{}"
 
 	print(" ", end="")
 	for i in range(GRID[0]):
 		print("--", end="")
 	print()
 	
-	for i in board:
+	for i, i_val in enumerate(board):
 		print("|",end="")
-		for j in i:
-			print("{} ".format(j),end="")
+		for j, j_val in enumerate(i_val):
+			#  this will preserve the item at this tile
+			# but add a whitespace
+			print_token = "{} ".format(j_val)
+
+			#  this will replace a mine with a two width MINE_ICON
+			# insted of the * because our player width is two
+			if j_val == "*":
+				print_token = MINE_ICON
+
+			if i == player.x and j == player.y:
+				print_token = colored_background_yellow(print_token)
+#			else:
+#				print_token = colored_background_green(print_token)
+			#print("{} ".format(print_token),end="")
+			print(print_token,end="")
 		print("|")
 	
 	print(" ", end="")
@@ -44,6 +78,34 @@ def generate_mines(board, num_mines):
 					rand_j = 0
 		board[rand_i][rand_j] = "*"
 
+class Player():
+	def __init__(self, board):
+		self.x = 0
+		self.y = 0
+		self.max_i = len(board)
+		self.max_j = len(board[0])
+		logging.info("player initialized at {}, {}".format(self.x, self.y))
+
+	def move_right(self):
+		if self.y < self.max_j-1:
+			self.y += 1
+		logging.info("player moved to {}, {}".format(self.x, self.y))
+	
+	def move_down(self):
+		if self.x < self.max_i-1:
+			self.x += 1
+		logging.info("player moved to {}, {}".format(self.x, self.y))
+
+	def move_left(self):
+		if self.y > 0:
+			self.y -= 1
+		logging.info("player moved to {}, {}".format(self.x, self.y))
+
+	def move_up(self):
+		if self.x > 0:
+			self.x -= 1
+		logging.info("player moved to {}, {}".format(self.x, self.y))
+
 logging.basicConfig(filename="mine.log", level=logging.INFO)
 logging.info(" ")
 logging.info("started minesweeper")
@@ -53,11 +115,35 @@ GRID = (10,10)
 
 board = [[" " for x in range(GRID[0])] for i in range(GRID[1])]
 
-print_board(board)
+player = Player(board)
+
+print_board(board, player)
 
 generate_mines(board, MINES)
 
-print_board(board)
+print_board(board, player)
+
+num_moves = 10
+
+
+while num_moves > 0:
+	logging.info("num_moves: {}".format(num_moves))
+	direction = input("--> ")
+	if direction[0] == "\n":
+		num_moves -= 1
+	else:
+		direction = direction[0]
+
+	if direction == 'a':
+		player.move_left()
+	if direction == 's':
+		player.move_down()
+	if direction == 'w':
+		player.move_up()
+	if direction == 'd':
+		player.move_right()
+
+	print_board(board, player)
 
 logging.info("finished minesweeper")
 logging.info(" ")
