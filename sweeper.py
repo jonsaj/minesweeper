@@ -21,6 +21,50 @@ def colored_background_green(text):
 def colored_background_yellow(text):
     return colored_background_reset("\u001b[43m{}".format(text))
 
+def inside(board, x, y):
+	# bounds
+	if x < 0 or y < 0:
+		return False
+	if x > len(board)-1 or y > len(board[0])-1:
+		return False
+
+	# empty space designates non-painted space
+	if board[x][y] is " ":
+		return True
+	else:
+		return False
+
+def set_node(board, x, y):
+	# TODO: check n,s,e,w for mines and set number
+	board[x][y] = "."
+
+def flood_fill(board, x, y):
+	if not inside(board, x, y):
+		return
+
+	set_node(board, x, y)
+
+	# south, north, west, east
+	flood_fill(board, x+1, y)
+	flood_fill(board, x-1, y)
+	flood_fill(board, x, y-1)
+	flood_fill(board, x, y+1)
+
+def reveal_tile(board, player):
+	if board[player.x][player.y] == "*":
+		print("you died")
+		exit()
+
+	# flood fill traversal
+	# TODO: recursive traversal is ineffecient.
+	# re-implement with a better flood fill
+	x = player.x
+	y = player.y
+	
+	flood_fill(board, x, y)
+
+	# expanding search to find mine borders
+
 def print_board(board, player):
 	GRID = (len(board),len(board[0]))
 
@@ -37,6 +81,7 @@ def print_board(board, player):
 			#  this will preserve the item at this tile
 			# but add a whitespace
 			print_token = "{} ".format(j_val)
+#			print_token = "  ".format(j_val)
 
 			#  this will replace a mine with a two width MINE_ICON
 			# insted of the * because our player width is two
@@ -110,7 +155,7 @@ logging.basicConfig(filename="mine.log", level=logging.INFO)
 logging.info(" ")
 logging.info("started minesweeper")
 
-MINES = 10
+MINES = 50
 GRID = (10,10)
 
 board = [[" " for x in range(GRID[0])] for i in range(GRID[1])]
@@ -129,19 +174,24 @@ num_moves = 10
 while num_moves > 0:
 	logging.info("num_moves: {}".format(num_moves))
 	direction = input("--> ")
-	if direction[0] == "\n":
-		num_moves -= 1
+	
+	# no char input means player is making this selection
+	if direction == "":
+		reveal_tile(board, player)
+
+	# check for a direction or a flag
 	else:
 		direction = direction[0]
-
-	if direction == 'a':
-		player.move_left()
-	if direction == 's':
-		player.move_down()
-	if direction == 'w':
-		player.move_up()
-	if direction == 'd':
-		player.move_right()
+		if direction == 'a':
+			player.move_left()
+		if direction == 's':
+			player.move_down()
+		if direction == 'w':
+			player.move_up()
+		if direction == 'd':
+			player.move_right()
+		if direction == 'f':
+			num_moves -= 1
 
 	print_board(board, player)
 
