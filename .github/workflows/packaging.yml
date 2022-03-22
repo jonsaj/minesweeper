@@ -1,5 +1,10 @@
 name: package-application
 
+on:
+  push:
+    branches:
+      - master
+
 jobs:
   build:
 
