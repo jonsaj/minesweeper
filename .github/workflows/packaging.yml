@@ -18,7 +18,7 @@ jobs:
           pip3 install pygame
       - name: build with Pyinstaller
         run : |
-          pyinstaller --onefile --clean 
+          pyinstaller --onefile --clean sweeper.py
       - name: Archive Pyinstaller Artifacts
         uses: actions/upload-artifact@v2
         with:
