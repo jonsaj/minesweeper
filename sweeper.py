@@ -3,6 +3,7 @@ import random
 #import pygame
 import sys
 import os
+import argparse
 
 def colored(r, g, b, text):
     return "\033[38;2;{};{};{}m{} \033[38;2;255;255;255m".format(r, g, b, text)
@@ -225,12 +226,22 @@ class Player():
 if os.name == 'nt':
 	os.system('color')
 
+parser = argparse.ArgumentParser(description='minesweeper - accepts size and num mines as args')
+parser.add_argument('-s', '--size', type=int, help='A number to set the size of the gameboard', default=20)
+parser.add_argument('-m', '--mines', type=int, help='A number to set the number of mines in the game', default=20)
+
+args = parser.parse_args()
+
+if args.mines > (args.size * args.size):
+	print("too mane mines for gameboard size")
+	exit(5)
+
 logging.basicConfig(filename="mine.log", level=logging.INFO)
 logging.info(" ")
 logging.info("started minesweeper")
 
-NUM_MINES = 20
-GRID = (20,20)
+NUM_MINES = args.mines
+GRID = (args.size,args.size)
 
 board = [[UNKNOWN for x in range(GRID[0])] for i in range(GRID[1])]
 solution_board = [[UNKNOWN for x in range(GRID[0])] for i in range(GRID[1])]
