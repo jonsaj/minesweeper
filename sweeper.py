@@ -2,6 +2,7 @@ import logging
 import random
 #import pygame
 import sys
+import os
 
 def colored(r, g, b, text):
     return "\033[38;2;{};{};{}m{} \033[38;2;255;255;255m".format(r, g, b, text)
@@ -220,6 +221,9 @@ class Player():
 		if self.x > 0:
 			self.x -= 1
 		logging.info("player moved to {}, {}".format(self.x, self.y))
+
+if os.name == 'nt':
+	os.system('color')
 
 logging.basicConfig(filename="mine.log", level=logging.INFO)
 logging.info(" ")
