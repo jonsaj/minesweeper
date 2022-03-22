@@ -61,8 +61,8 @@ def flood_fill(board, solution_board, x, y):
 			flood_fill(board, solution_board, x, y+1)
 
 def reveal_tile(board, solution_board, player):
-	if board[player.x][player.y] == MINE:
-		print_board(board, player, mine_icon="{}", message="YOU DIED LIKE A BITCH.")
+	if solution_board[player.x][player.y] == MINE:
+		print_board(board, player, mine_icon=colored_background_red("{}"), message="YOU DIED LIKE A BITCH.")
 		player.num_moves = 0
 		return
 
@@ -225,8 +225,8 @@ logging.basicConfig(filename="mine.log", level=logging.INFO)
 logging.info(" ")
 logging.info("started minesweeper")
 
-NUM_MINES = 5 
-GRID = (25,25)
+NUM_MINES = 20
+GRID = (20,20)
 
 board = [[UNKNOWN for x in range(GRID[0])] for i in range(GRID[1])]
 solution_board = [[UNKNOWN for x in range(GRID[0])] for i in range(GRID[1])]
@@ -271,12 +271,18 @@ while player.num_moves > 0:
 		if direction == 'd':
 			player.move_right()
 		if direction == 'f':
-			board[player.x][player.y] = FLAG
-			player.num_moves -= 1
+			if board[player.x][player.y] == FLAG:
+				revert = UNKNOWN
+				if solution_board[player.x][player.y] == MINE:
+					revert = MINE
+				board[player.x][player.y] = revert
+				player.num_moves += 1
+			elif board[player.x][player.y] == UNKNOWN or board[player.x][player.y] == MINE:
+				board[player.x][player.y] = FLAG
+				player.num_moves -= 1
 
 		if direction == 'r':
 			print_solution = True
 
-print_board(board, player)
 logging.info("finished minesweeper")
 logging.info(" ")
