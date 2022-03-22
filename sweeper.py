@@ -21,39 +21,50 @@ def colored_background_green(text):
 def colored_background_yellow(text):
     return colored_background_reset("\u001b[43m{}".format(text))
 
-def inside(board, x, y):
+MINE = "*"
+FLAG = "f"
+UNKNOWN = "."
+BLANK = " "
+
+def inside(board, solution_board, x, y):
 	# bounds
 	if x < 0 or y < 0:
 		return False
-	if x > len(board)-1 or y > len(board[0])-1:
+	if x >= len(solution_board) or y >= len(solution_board[0]):
 		return False
 
-	# empty space designates non-painted space
-	if board[x][y] is " ":
-		return True
-	else:
+	# if we've already resolved this, we can treat it as false
+	if board[x][y] != UNKNOWN:
 		return False
 
-def set_node(board, x, y):
-	# TODO: check n,s,e,w for mines and set number
-	board[x][y] = "."
+	# mine will be false
+	tile = solution_board[x][y]
+	if tile == MINE:
+		return false
+	
+	# we'll handle a number or a blank outside of this function, I guess
+	return tile
+		
 
-def flood_fill(board, x, y):
-	if not inside(board, x, y):
+def flood_fill(board, solution_board, x, y):
+#	print_board(board, None)
+	set_value = inside(board, solution_board, x, y)
+	if set_value is not False:
+		# 	 if we're still looking at a fillable value,
+		# ie a '.', then we can continue filling here
+		board[x][y] = set_value
+		if set_value == BLANK:
+			# south, north, west, east
+			flood_fill(board, solution_board, x+1, y)
+			flood_fill(board, solution_board, x-1, y)
+			flood_fill(board, solution_board, x, y-1)
+			flood_fill(board, solution_board, x, y+1)
+
+def reveal_tile(board, solution_board, player):
+	if board[player.x][player.y] == MINE:
+		print_board(board, player, mine_icon="{}", message="YOU DIED LIKE A BITCH.")
+		player.num_moves = 0
 		return
-
-	set_node(board, x, y)
-
-	# south, north, west, east
-	flood_fill(board, x+1, y)
-	flood_fill(board, x-1, y)
-	flood_fill(board, x, y-1)
-	flood_fill(board, x, y+1)
-
-def reveal_tile(board, player):
-	if board[player.x][player.y] == "*":
-		print("you died")
-		exit()
 
 	# flood fill traversal
 	# TODO: recursive traversal is ineffecient.
@@ -61,7 +72,7 @@ def reveal_tile(board, player):
 	x = player.x
 	y = player.y
 	
-	flood_fill(board, x, y)
+	flood_fill(board, solution_board, x, y)
 
 	# expanding search to find mine borders
 def check_mine(board, x, y):
@@ -99,7 +110,7 @@ def resolve_board(board):
 	for x in range(len(board)):
 		for y in range(len(board[0])):
 			# skip over mines
-			if board[x][y] == "*":
+			if board[x][y] == MINE:
 				continue
 				
 			mine_count = count_surrounding_mines(board, x, y)
@@ -108,21 +119,21 @@ def resolve_board(board):
 			# 1) consistency
 			# 2) because we're awful programmers
 			if mine_count == 0:
-				tile_value = "."
+				tile_value = BLANK
 			else:
 				tile_value = str(mine_count)
 
 			board[x][y] = tile_value
 				
 
-def print_board(board, player):
+def print_board(board, player, flag_colors = None, flag_icon = "|^", mine_icon = "{} ".format(UNKNOWN), message=""):
 	GRID = (len(board),len(board[0]))
-
-	MINE_ICON = "{}"
-
+	MINE_ICON = mine_icon
+	FLAG_ICON = flag_icon
 	print(" ", end="")
-	for i in range(GRID[0]):
-		print("--", end="")
+	print(message, end="")
+	for i in range( (GRID[0]*2) -len(message) ):
+		print("-", end="")
 	print()
 	
 	for i, i_val in enumerate(board):
@@ -135,11 +146,16 @@ def print_board(board, player):
 
 			#  this will replace a mine with a two width MINE_ICON
 			# insted of the * because our player width is two
-			if j_val == "*":
+			if j_val == MINE:
 				print_token = MINE_ICON
+			if j_val == FLAG:
+				print_token = FLAG_ICON
+				if i != player.x or j != player.y:
+					print_token = colored_background_yellow(print_token)
 
-			if i == player.x and j == player.y:
-				print_token = colored_background_yellow(print_token)
+			if player is not None:
+				if i == player.x and j == player.y:
+					print_token = colored_background_green(print_token)
 #			else:
 #				print_token = colored_background_green(print_token)
 			#print("{} ".format(print_token),end="")
@@ -147,8 +163,11 @@ def print_board(board, player):
 		print("|")
 	
 	print(" ", end="")
-	for i in range(GRID[0]):
-		print("--",end="")
+	mines_message = "-- {} Mines remain ".format(player.num_moves)
+	print(mines_message, end="")
+	for i in range( (GRID[0]*2) - len(mines_message)):
+		print("-",end="")
+	print()
 	print()
 
 def generate_mines(board, num_mines):
@@ -159,7 +178,7 @@ def generate_mines(board, num_mines):
 		
 		#  check this space to make sure it's not
 		# already a mine
-		while board[rand_i][rand_j] is "*":
+		while board[rand_i][rand_j] is MINE:
 			logging.info("  new pos  {} of {} at ({}, {})".format(num_mine, num_mines, rand_i, rand_j))
 			#  we'll fill in the next available
 			# space with a mine
@@ -171,10 +190,11 @@ def generate_mines(board, num_mines):
 				rand_j += 1
 				if rand_j == len(board[0]):
 					rand_j = 0
-		board[rand_i][rand_j] = "*"
+		board[rand_i][rand_j] = MINE 
 
 class Player():
-	def __init__(self, board):
+	def __init__(self, board, num_mines):
+		self.num_moves = num_mines
 		self.x = 0
 		self.y = 0
 		self.max_i = len(board)
@@ -205,17 +225,16 @@ logging.basicConfig(filename="mine.log", level=logging.INFO)
 logging.info(" ")
 logging.info("started minesweeper")
 
-MINES = 50
+NUM_MINES = 5 
 GRID = (25,25)
 
-board = [[" " for x in range(GRID[0])] for i in range(GRID[1])]
-solution_board = [[" " for x in range(GRID[0])] for i in range(GRID[1])]
+board = [[UNKNOWN for x in range(GRID[0])] for i in range(GRID[1])]
+solution_board = [[UNKNOWN for x in range(GRID[0])] for i in range(GRID[1])]
 
-player = Player(board)
+player = Player(board, NUM_MINES)
 
-print_board(board, player)
+generate_mines(board, NUM_MINES)
 
-generate_mines(board, MINES)
 
 for x, board_row in enumerate(board):
 	for y, board_tile in enumerate(board_row):
@@ -224,22 +243,25 @@ for x, board_row in enumerate(board):
 resolve_board(solution_board)
 
 print_board(board, player)
-print_board(solution_board, player)
 
-num_moves = 10
+print_solution = False
 
+while player.num_moves > 0:
+	if print_solution:
+		print_solution = False
+		print_board(solution_board, player, message="SOLUTION BOARD", mine_icon="* ")
+	else:
+		print_board(board, player)
 
-while num_moves > 0:
-	logging.info("num_moves: {}".format(num_moves))
+	logging.info("num_moves: {}".format(player.num_moves))
 	direction = input("--> ")
 	
 	# no char input means player is making this selection
 	if direction == "":
-		reveal_tile(board, player)
+		reveal_tile(board, solution_board, player)
 
 	# check for a direction or a flag
 	else:
-		direction = direction[0]
 		if direction == 'a':
 			player.move_left()
 		if direction == 's':
@@ -249,9 +271,12 @@ while num_moves > 0:
 		if direction == 'd':
 			player.move_right()
 		if direction == 'f':
-			num_moves -= 1
+			board[player.x][player.y] = FLAG
+			player.num_moves -= 1
 
-	print_board(board, player)
+		if direction == 'r':
+			print_solution = True
 
+print_board(board, player)
 logging.info("finished minesweeper")
 logging.info(" ")
