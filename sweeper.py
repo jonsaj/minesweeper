@@ -1,6 +1,5 @@
 import logging
 import random
-#import pygame
 import sys
 import os
 import argparse
@@ -42,7 +41,7 @@ def inside(board, solution_board, x, y):
 	# mine will be false
 	tile = solution_board[x][y]
 	if tile == MINE:
-		return false
+		return False
 	
 	# we'll handle a number or a blank outside of this function, I guess
 	return tile
