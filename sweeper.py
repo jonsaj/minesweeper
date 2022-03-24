@@ -1,10 +1,8 @@
 import logging
 import random
-import sys
 import os
 import argparse
 from enum import Enum
-from textwrap import fill
 
 def colored(r, g, b, text):
     return "\033[38;2;{};{};{}m{} \033[38;2;255;255;255m".format(r, g, b, text)
@@ -48,14 +46,16 @@ class Game():
 		# initialize with a default player
 		self.player = Player()
 		self.game_running = True
+		self.player_lost = False
+		self.player_won = False
 		self.game_message = ""
 		self.debug_render_bool = False
 
 		if num_mines is None:
 			num_mines = size
 		self.num_mines = num_mines
-
-		self.num_moves = self.num_mines
+		self.num_flags_remaining = self.num_mines
+		self.num_revealed_tiles = 0
 
 		# create 2d board
 		self.solution_board = [[UNKNOWN for x in range(size)] for i in range(size)]
@@ -63,14 +63,22 @@ class Game():
 		self.__generate_mines()
 		self.__resolve_board()
 
+	def __total_revealable_tiles(self):
+		return (len(self.solution_board) * len(self.solution_board[0])) - self.num_mines
+
 	def enable_debug_render(self):
 		self.debug_render_bool = True
 
 	def render(self):
+		if self.player_won:
+			self.game_message = "wow. pretty cool. you won."
+
 		if self.debug_render_bool:
 			self.__print_board(self.solution_board, self.player, message="SOLUTION BOARD", mine_icon = "* ")
+			self.debug_render_bool = False
 		else:
-			self.__print_board(self.game_state_board, self.player, message="GAME BOARD", mine_icon = colored_background_red("* "))
+			self.__print_board(self.game_state_board, self.player, message=self.game_message, mine_icon = colored_background_red("* "))
+			self.game_message = ''
 
 	def __print_board(self, board, player, flag_colors = None, flag_icon = "|^", mine_icon = "{} ".format(UNKNOWN), message=""):
 		GRID = (len(board),len(board[0]))
@@ -109,7 +117,7 @@ class Game():
 			print("|")
 	
 		print(" ", end="")
-		mines_message = "-- {} Mines remain ".format(self.num_moves)
+		mines_message = "-- {} Flags remain ".format(self.num_flags_remaining)
 		print(mines_message, end="")
 		for i in range( (GRID[0]*2) - len(mines_message)):
 			print("-",end="")
@@ -244,25 +252,39 @@ class Game():
 
 
 	#  Recursively check surrounding tiles for appropriate tiles to reveal
+	# returns the total number of tiles revealed during the flood
 	def __flood_reveal(self, x, y):
+		tiles_revealed_count = 0
 		fillable_tile = self.__inside(x, y)
 		if fillable_tile is not False:
 			# assign our new revealed tile (BLANK or a valid number)
 			self.game_state_board[x][y] = fillable_tile
+			tiles_revealed_count += 1
 
 			# 	 if we're still looking at a fillable value,
 			# ie a BLANK, then we can continue filling here
 			if fillable_tile == BLANK:
 				# south, north, west, east
-				self.__flood_reveal(x+1, y)
-				self.__flood_reveal(x-1, y)
-				self.__flood_reveal(x, y-1)
-				self.__flood_reveal(x, y+1)
+				tiles_revealed_count += self.__flood_reveal(x+1, y)
+				tiles_revealed_count += self.__flood_reveal(x-1, y)
+				tiles_revealed_count += self.__flood_reveal(x, y-1)
+				tiles_revealed_count += self.__flood_reveal(x, y+1)
+
+		return tiles_revealed_count
+
+	# reveals all mines in the game state to the player
+	def __reveal_mines(self):
+		for i, row in enumerate(self.solution_board):
+			for j, tile in enumerate(row):
+				if tile == MINE:
+					self.game_state_board[i][j] = MINE
+
 
 	def reveal_tile(self):
 		if self.solution_board[self.player.x][self.player.y] == MINE:
 			self.game_message="YOU DIED LIKE A BITCH."
-			return
+			self.__reveal_mines()
+			self.player_lost = True
 
 		# flood fill traversal
 		# TODO: recursive traversal is ineffecient.
@@ -270,7 +292,30 @@ class Game():
 		x = self.player.x
 		y = self.player.y
 
-		self.__flood_reveal(x, y)
+		self.num_revealed_tiles += self.__flood_reveal(x, y)
+
+		#  game winning condition is if the player successfully has revealed
+		# every non-bomb tile
+		if self.num_revealed_tiles == self.__total_revealable_tiles():
+			self.player_won = True
+
+	def flag_tile(self):
+		# first, check if player is recovering a flag
+		# TODO: change relationship between player and boards. Add some sort
+		# of player.get_current_tile(game_state_board) method 
+		if self.game_state_board[self.player.x][self.player.y] == FLAG:
+			self.num_flags_remaining += 1
+			self.game_state_board[self.player.x][self.player.y] = UNKNOWN
+		#  otherwise, they'll be trying to consume a flag. Only allow this if this tile 
+		# is flaggable (ie tile is UNKNOWN)
+		elif self.game_state_board[self.player.x][self.player.y] == UNKNOWN:
+			if self.num_flags_remaining > 0:
+				self.game_state_board[self.player.x][self.player.y] = FLAG
+				self.num_flags_remaining -= 1
+			elif self.num_flags_remaining == 0:
+				self.game_message = "NO FLAGS REMAIN"
+			else:
+				logging.info("impossible flagging case? ({}, {})".format(self.player.x, self.player.y))
 
 
 if __name__ == '__main__':
@@ -278,8 +323,8 @@ if __name__ == '__main__':
 		os.system('color')
 
 	parser = argparse.ArgumentParser(description='minesweeper - accepts size and num mines as args')
-	parser.add_argument('-s', '--size', type=int, help='A number to set the size of the gameboard', default=20)
-	parser.add_argument('-m', '--mines', type=int, help='A number to set the number of mines in the game', default=20)
+	parser.add_argument('-s', '--size', type=int, help='A number to set the size of the gameboard', default=10)
+	parser.add_argument('-m', '--mines', type=int, help='A number to set the number of mines in the game', default=5)
 
 	args = parser.parse_args()
 
@@ -297,53 +342,23 @@ if __name__ == '__main__':
 	while game.game_running:
 		game.render()
 		player_input = input("--> ")
+		#  check for player menu options
 		if player_input == 'q':
 			game.exit()
-		if player_input in DIRECTION_MAP:
-			game.move_player(DIRECTION_MAP[player_input])
-		if player_input == 'r':
-			game.enable_debug_render()
-		if player_input == '':
-			game.reveal_tile()
-
-#	while player.num_moves > 0:
-#		if print_solution:
-#			print_solution = False
-#			print_board(solution_board, player, message="SOLUTION BOARD", mine_icon="* ")
-#		else:
-#			print_board(board, player)
-#
-#		logging.info("num_moves: {}".format(player.num_moves))
-#		direction = input("--> ")
-#
-#		# no char input means player is making this selection
-#		if direction == "":
-#			reveal_tile(board, solution_board, player)
-#
-#		# check for a direction or a flag
-#		else:
-#			if direction == Direction.LEFT:
-#				Direction.LEFT.value
-#				player.move_left()
-#			if direction == 's':
-#				player.move_down()
-#			if direction == 'w':
-#				player.move_up()
-#			if direction == 'd':
-#				player.move_right()
-#			if direction == 'f':
-#				if board[player.x][player.y] == FLAG:
-#					revert = UNKNOWN
-#					if solution_board[player.x][player.y] == MINE:
-#						revert = MINE
-#					board[player.x][player.y] = revert
-#					player.num_moves += 1
-#				elif board[player.x][player.y] == UNKNOWN or board[player.x][player.y] == MINE:
-#					board[player.x][player.y] = FLAG
-#					player.num_moves -= 1
-#
-#			if direction == 'r':
-#				print_solution = True
+		#  n is new game
+		elif player_input == 'n':
+			game = Game(args.size, args.mines)
+		#  if player hasn't lost, accept gameplay input
+		# other than only menu options
+		elif not game.player_lost:
+			if player_input in DIRECTION_MAP:
+				game.move_player(DIRECTION_MAP[player_input])
+			if player_input == 'r':
+				game.enable_debug_render()
+			if player_input == 'f':
+				game.flag_tile()
+			if player_input == '':
+				game.reveal_tile()
 
 	logging.info("finished minesweeper")
 	logging.info(" ")
