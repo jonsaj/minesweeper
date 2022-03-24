@@ -1,10 +1,10 @@
 import logging
 import random
-from re import A, S
 import sys
 import os
 import argparse
 from enum import Enum
+from textwrap import fill
 
 def colored(r, g, b, text):
     return "\033[38;2;{};{};{}m{} \033[38;2;255;255;255m".format(r, g, b, text)
@@ -28,57 +28,6 @@ UNKNOWN = "."
 MINE = "*"
 FLAG = "f"
 BLANK = " "
-
-def inside(board, solution_board, x, y):
-	# bounds
-	if x < 0 or y < 0:
-		return False
-	if x >= len(solution_board) or y >= len(solution_board[0]):
-		return False
-
-	# if we've already resolved this, we can treat it as false
-	if board[x][y] != UNKNOWN:
-		return False
-
-	# mine will be false
-	tile = solution_board[x][y]
-	if tile == MINE:
-		return False
-	
-	# we'll handle a number or a blank outside of this function, I guess
-	return tile
-		
-
-def flood_fill(board, solution_board, x, y):
-#	print_board(board, None)
-	set_value = inside(board, solution_board, x, y)
-	if set_value is not False:
-		# 	 if we're still looking at a fillable value,
-		# ie a '.', then we can continue filling here
-		board[x][y] = set_value
-		if set_value == BLANK:
-			# south, north, west, east
-			flood_fill(board, solution_board, x+1, y)
-			flood_fill(board, solution_board, x-1, y)
-			flood_fill(board, solution_board, x, y-1)
-			flood_fill(board, solution_board, x, y+1)
-
-def reveal_tile(board, solution_board, player):
-	if solution_board[player.x][player.y] == MINE:
-		print_board(board, player, mine_icon=colored_background_red("{}"), message="YOU DIED LIKE A BITCH.")
-		player.num_moves = 0
-		return
-
-	# flood fill traversal
-	# TODO: recursive traversal is ineffecient.
-	# re-implement with a better flood fill
-	x = player.x
-	y = player.y
-	
-	flood_fill(board, solution_board, x, y)
-
-
-
 			
 
 class Player():
@@ -88,10 +37,10 @@ class Player():
 		logging.info("player initialized at {}, {}".format(self.x, self.y))
 
 class Direction(Enum):
-	UP = 1
-	DOWN = 2
-	LEFT = 3
-	RIGHT = 4
+	UP = 'w'
+	DOWN = 's'
+	LEFT = 'a'
+	RIGHT = 'd'
 
 class Game():
 	def __init__(self, size = 10, num_mines = None):
@@ -99,6 +48,8 @@ class Game():
 		# initialize with a default player
 		self.player = Player()
 		self.game_running = True
+		self.game_message = ""
+		self.debug_render_bool = False
 
 		if num_mines is None:
 			num_mines = size
@@ -108,11 +59,18 @@ class Game():
 
 		# create 2d board
 		self.solution_board = [[UNKNOWN for x in range(size)] for i in range(size)]
+		self.game_state_board = [[UNKNOWN for x in range(size)] for i in range(size)]
 		self.__generate_mines()
 		self.__resolve_board()
 
+	def enable_debug_render(self):
+		self.debug_render_bool = True
+
 	def render(self):
-		self.__print_board(self.solution_board, self.player, mine_icon = "* ")
+		if self.debug_render_bool:
+			self.__print_board(self.solution_board, self.player, message="SOLUTION BOARD", mine_icon = "* ")
+		else:
+			self.__print_board(self.game_state_board, self.player, message="GAME BOARD", mine_icon = colored_background_red("* "))
 
 	def __print_board(self, board, player, flag_colors = None, flag_icon = "|^", mine_icon = "{} ".format(UNKNOWN), message=""):
 		GRID = (len(board),len(board[0]))
@@ -259,6 +217,61 @@ class Game():
 
 		logging.info("player moved to {}, {}".format(self.player.x, self.player.y))
 
+	#  Returns False if we are outside of our area
+	#    otherwise, will return a tile value:
+	#   if we are inside our fillable area, will return BLANK
+	#   if we are on the perimiter of our fillable area, will
+	#    return the number of surrounding mines
+	def __inside(self, x, y):
+		# bounds
+		if x < 0 or y < 0:
+			return False
+		if x >= len(self.solution_board) or y >= len(self.solution_board[0]):
+			return False
+
+		# if we've already resolved this, we can treat it as false
+		if self.game_state_board[x][y] != UNKNOWN:
+			return False
+
+		# a located mine will return false
+		tile = self.solution_board[x][y]
+		if tile == MINE:
+			return False
+
+		# we'll handle a number or a blank outside of this function, I guess
+		# TODO: I dont like mixing types in the return. Fix this.
+		return tile
+
+
+	#  Recursively check surrounding tiles for appropriate tiles to reveal
+	def __flood_reveal(self, x, y):
+		fillable_tile = self.__inside(x, y)
+		if fillable_tile is not False:
+			# assign our new revealed tile (BLANK or a valid number)
+			self.game_state_board[x][y] = fillable_tile
+
+			# 	 if we're still looking at a fillable value,
+			# ie a BLANK, then we can continue filling here
+			if fillable_tile == BLANK:
+				# south, north, west, east
+				self.__flood_reveal(x+1, y)
+				self.__flood_reveal(x-1, y)
+				self.__flood_reveal(x, y-1)
+				self.__flood_reveal(x, y+1)
+
+	def reveal_tile(self):
+		if self.solution_board[self.player.x][self.player.y] == MINE:
+			self.game_message="YOU DIED LIKE A BITCH."
+			return
+
+		# flood fill traversal
+		# TODO: recursive traversal is ineffecient.
+		# re-implement with a better flood fill
+		x = self.player.x
+		y = self.player.y
+
+		self.__flood_reveal(x, y)
+
 
 if __name__ == '__main__':
 	if os.name == 'nt':
@@ -279,24 +292,20 @@ if __name__ == '__main__':
 	logging.info("started minesweeper")
 
 	game = Game(args.size, args.mines)
-
-	game.render()
+	DIRECTION_MAP = {d.value:d for d in Direction}
 
 	while game.game_running:
+		game.render()
 		player_input = input("--> ")
-		if player_input[0] == 'q':
+		if player_input == 'q':
 			game.exit()
+		if player_input in DIRECTION_MAP:
+			game.move_player(DIRECTION_MAP[player_input])
+		if player_input == 'r':
+			game.enable_debug_render()
+		if player_input == '':
+			game.reveal_tile()
 
-#	for x, board_row in enumerate(board):
-#		for y, board_tile in enumerate(board_row):
-#			solution_board[x][y] = board_tile
-#
-#	resolve_board(solution_board)
-#
-#	print_board(board, player)
-#
-#	print_solution = False
-#
 #	while player.num_moves > 0:
 #		if print_solution:
 #			print_solution = False
@@ -313,7 +322,8 @@ if __name__ == '__main__':
 #
 #		# check for a direction or a flag
 #		else:
-#			if direction == 'a':
+#			if direction == Direction.LEFT:
+#				Direction.LEFT.value
 #				player.move_left()
 #			if direction == 's':
 #				player.move_down()
